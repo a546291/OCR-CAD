@@ -257,10 +257,21 @@ function onDrop(e) { e.preventDefault(); onDragLeave(e); handleFiles(e.dataTrans
 
 async function handleFiles(files) {
   if (!files.length) return;
+  const apiKey = localStorage.getItem('gemini_api_key') || '';
+  if (!apiKey) {
+    alert('請先在左側「API 設定」輸入您的 Gemini API Key！');
+    nav(document.querySelector('[data-page="settings"]'));
+    return;
+  }
+
   const fd = new FormData();
   for (const f of files) fd.append('files', f);
 
-  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const res = await fetch('/api/upload', { 
+    method: 'POST', 
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: fd 
+  });
   const data = await res.json();
 
   for (const job of data.jobs || []) {
@@ -276,9 +287,19 @@ async function handleUrl() {
   
   urlInput.value = ''; // clear input
   
+  const apiKey = localStorage.getItem('gemini_api_key') || '';
+  if (!apiKey) {
+    alert('請先在左側「API 設定」輸入您的 Gemini API Key！');
+    nav(document.querySelector('[data-page="settings"]'));
+    return;
+  }
+  
   const res = await fetch('/api/upload-url', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
     body: JSON.stringify({ url })
   });
   const data = await res.json();
@@ -482,10 +503,11 @@ async function saveApiKey() {
   const key = document.getElementById('api-key-input').value.trim();
   const alertEl = document.getElementById('api-alert');
   if (!key) { alertEl.className = 'alert alert-error'; alertEl.textContent = '請輸入 API Key'; return; }
-  const res = await fetch('/api/set-apikey', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
-  const data = await res.json();
-  if (res.ok) { alertEl.className = 'alert alert-success'; alertEl.textContent = '✅ API Key 已套用！'; }
-  else { alertEl.className = 'alert alert-error'; alertEl.textContent = '❌ ' + data.error; }
+  
+  localStorage.setItem('gemini_api_key', key);
+  alertEl.className = 'alert alert-success';
+  alertEl.textContent = '✅ API Key 已安全儲存於您的瀏覽器！';
+  setTimeout(() => { alertEl.className = ''; alertEl.textContent = ''; }, 3000);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -510,11 +532,10 @@ async function initMeta() {
   }
   
   
-  // Load saved API key
-  const apiRes = await fetch('/api/get-apikey');
-  const apiData = await apiRes.json();
-  if (apiData.key) {
-    document.getElementById('api-key-input').value = apiData.key;
+  // Load saved API key from localStorage
+  const savedKey = localStorage.getItem('gemini_api_key');
+  if (savedKey) {
+    document.getElementById('api-key-input').value = savedKey;
   }
 }
 

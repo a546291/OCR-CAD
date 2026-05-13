@@ -10,7 +10,7 @@ from google.genai import types
 from database import get_db, SUBJECTS, IMAGES_DIR
 
 # ── Gemini API 設定 ────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# API Key 現在由前端傳遞，不再從伺服器全域變數讀取
 
 SYSTEM_PROMPT = """你是一位台灣國中階段的試卷辨識與整理助理。
 請依照以下規則處理輸入的試卷原始文字：
@@ -104,13 +104,12 @@ def extract_pdf(pdf_path: str) -> dict:
 
 
 # ── Gemini 語意修正 ─────────────────────────────────────────────────────────────
-def parse_with_gemini(raw_text: str) -> list[dict]:
+def parse_with_gemini(raw_text: str, api_key: str) -> list[dict]:
     """Call Gemini API to parse the exam, return structured question list"""
-    current_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not current_key:
-        raise ValueError("Please set environment variable GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("Please provide a valid GEMINI_API_KEY")
 
-    client = genai.Client(api_key=current_key)
+    client = genai.Client(api_key=api_key)
     prompt = SYSTEM_PROMPT + "\n\n---試卷原始文字---\n" + raw_text
 
     response = client.models.generate_content(
@@ -181,7 +180,7 @@ def save_questions(questions: list[dict], source_file: str, image_paths: list[st
 
 
 # ── 主流程（供 Flask 呼叫）──────────────────────────────────────────────────────
-def process_pdf_pipeline(pdf_path: str) -> dict:
+def process_pdf_pipeline(pdf_path: str, api_key: str) -> dict:
     """完整處理一個 PDF，回傳結果摘要"""
     source_file = os.path.basename(pdf_path)
 
@@ -189,7 +188,7 @@ def process_pdf_pipeline(pdf_path: str) -> dict:
     extracted = extract_pdf(pdf_path)
 
     # 2. Gemini 解析
-    questions = parse_with_gemini(extracted["text"])
+    questions = parse_with_gemini(extracted["text"], api_key)
 
     # 3. 存入資料庫
     saved_ids = save_questions(questions, source_file, extracted["image_paths"])

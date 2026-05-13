@@ -14,25 +14,14 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
-
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            if "GEMINI_API_KEY" in config:
-                os.environ["GEMINI_API_KEY"] = config["GEMINI_API_KEY"]
-
-load_config()
-
 # ── 處理任務狀態追蹤 ────────────────────────────────────────────────────────────
 jobs: dict[str, dict] = {}  # job_id -> {status, result, error}
 
 
-def run_pipeline(job_id: str, pdf_path: str):
+def run_pipeline(job_id: str, pdf_path: str, api_key: str):
     try:
         jobs[job_id]["status"] = "processing"
-        result = process_pdf_pipeline(pdf_path)
+        result = process_pdf_pipeline(pdf_path, api_key)
         jobs[job_id]["status"] = "done"
         jobs[job_id]["result"] = result
     except Exception as e:
@@ -53,6 +42,11 @@ def serve_image(q_id, filename):
 # ── API: 上傳 PDF ───────────────────────────────────────────────────────────────
 @app.route("/api/upload", methods=["POST"])
 def upload():
+    auth_header = request.headers.get("Authorization", "")
+    api_key = auth_header.replace("Bearer ", "").strip()
+    if not api_key:
+        return jsonify({"error": "未提供 API Key"}), 401
+
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "未選擇任何檔案"}), 400
@@ -67,7 +61,7 @@ def upload():
 
         job_id = f"job_{uuid.uuid4().hex[:8]}"
         jobs[job_id] = {"status": "queued"}
-        threading.Thread(target=run_pipeline, args=(job_id, pdf_path)).start()
+        threading.Thread(target=run_pipeline, args=(job_id, pdf_path, api_key)).start()
         started_jobs.append({"job_id": job_id, "filename": safe_name})
 
     return jsonify({"jobs": started_jobs})
@@ -75,6 +69,11 @@ def upload():
 # ── API: 從 URL 載入 PDF ───────────────────────────────────────────────────────
 @app.route("/api/upload-url", methods=["POST"])
 def upload_url():
+    auth_header = request.headers.get("Authorization", "")
+    api_key = auth_header.replace("Bearer ", "").strip()
+    if not api_key:
+        return jsonify({"error": "未提供 API Key"}), 401
+
     data = request.get_json()
     url = data.get("url", "").strip()
     if not url:
@@ -103,7 +102,7 @@ def upload_url():
 
         job_id = f"job_{uuid.uuid4().hex[:8]}"
         jobs[job_id] = {"status": "queued"}
-        threading.Thread(target=run_pipeline, args=(job_id, pdf_path)).start()
+        threading.Thread(target=run_pipeline, args=(job_id, pdf_path, api_key)).start()
 
         return jsonify({"jobs": [{"job_id": job_id, "filename": filename}]})
     except Exception as e:
@@ -233,35 +232,6 @@ def delete_question(q_id: str):
     conn.commit()
     conn.close()
     return jsonify({"message": "已刪除"})
-
-
-# ── API: 動態設定 Gemini API Key ───────────────────────────────────────────────
-@app.route("/api/set-apikey", methods=["POST"])
-def set_apikey():
-    data = request.get_json()
-    key = data.get("key", "").strip()
-    if not key:
-        return jsonify({"error": "API Key 不得為空"}), 400
-    os.environ["GEMINI_API_KEY"] = key
-    
-    # Save to config file
-    config = {}
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            try:
-                config = json.load(f)
-            except json.JSONDecodeError:
-                pass
-    config["GEMINI_API_KEY"] = key
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f)
-        
-    return jsonify({"message": "已套用並儲存"})
-
-@app.route("/api/get-apikey", methods=["GET"])
-def get_apikey():
-    key = os.environ.get("GEMINI_API_KEY", "")
-    return jsonify({"key": key})
 
 
 if __name__ == "__main__":
