@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>錯卷題庫系統</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22273a;
+      --border: #2e3350;
+      --accent: #5b8dee;
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', sans-serif; min-height: 100vh; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .main { padding: 32px; overflow-y: auto; }
+
+    /* Sidebar */
+    .logo { font-size: 18px; font-weight: 700; color: var(--accent); margin-bottom: 16px; padding: 0 8px; display: flex; align-items: center; gap: 8px; }
+    .logo span { font-size: 24px; }
+    .nav-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); transition: all 0.2s; display: flex; align-items: center; gap: 10px; }
+    .nav-item:hover, .nav-item.active { background: var(--surface2); color: var(--text); }
+    .nav-item.active { border-left: 3px solid var(--accent); }
+    .nav-icon { font-size: 18px; }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .page-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+
+    /* Upload Area */
+    .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--surface); }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(91,141,238,0.06); }
+    .upload-icon { font-size: 48px; margin-bottom: 16px; }
+    .upload-hint { font-size: 15px; color: var(--muted); margin-top: 8px; }
+    .upload-btn { display: inline-block; margin-top: 20px; padding: 10px 24px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 14px; font-weight: 500; }
+    #file-input { display: none; }
+
+    /* Job List */
+    .job-list { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; }
+    .job-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: flex; align-items: center; gap: 16px; }
+    .job-name { font-size: 14px; font-weight: 500; flex: 1; }
+    .badge { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    .badge-queued { background: rgba(139,146,164,0.2); color: var(--muted); }
+    .badge-processing { background: rgba(251,191,36,0.15); color: var(--warning); }
+    .badge-done { background: rgba(52,211,153,0.15); color: var(--success); }
+    .badge-error { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .job-count { font-size: 13px; color: var(--muted); }
+
+    /* Filters */
+    .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+    .filter-select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; cursor: pointer; }
+    .filter-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; width: 220px; }
+    .filter-input::placeholder { color: var(--muted); }
+
+    /* Question Table */
+    .q-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .q-table th { background: var(--surface); padding: 10px 14px; text-align: left; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+    .q-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .q-table tr:hover td { background: var(--surface); }
+    .q-table tr.selected td { background: rgba(91,141,238,0.08); }
+    .subject-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background: rgba(167,139,250,0.15); color: var(--accent2); }
+    .type-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: rgba(91,141,238,0.12); color: var(--accent); margin-left: 6px; }
+    .stem-text { color: var(--text); line-height: 1.6; }
+    .no-data { text-align: center; padding: 48px; color: var(--muted); }
+
+    /* Buttons */
+    .btn { padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface2); color: var(--text); }
+    .btn-danger { background: rgba(248,113,113,0.15); color: var(--danger); border: 1px solid transparent; }
+    .btn-danger:hover { background: rgba(248,113,113,0.25); }
+
+    /* Export Bar */
+    .export-bar { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 14px 0; display: flex; align-items: center; gap: 14px; margin-top: 24px; }
+    .export-bar .selected-count { font-size: 13px; color: var(--muted); flex: 1; }
+    .export-title-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; outline: none; width: 200px; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+
+    /* API Key Page */
+    .form-group { margin-bottom: 20px; }
+    .form-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; display: block; }
+    .form-input { width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; }
+    .form-input:focus { border-color: var(--accent); }
+    .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-top: 12px; }
+    .alert-success { background: rgba(52,211,153,0.1); color: var(--success); border: 1px solid rgba(52,211,153,0.2); }
+    .alert-error { background: rgba(248,113,113,0.1); color: var(--danger); border: 1px solid rgba(248,113,113,0.2); }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo"><span>📚</span>錯卷題庫系統</div>
+    <div class="nav-item active" data-page="upload" onclick="nav(this)"><span class="nav-icon">📤</span>上傳試卷</div>
+    <div class="nav-item" data-page="questions" onclick="nav(this)"><span class="nav-icon">📋</span>題庫瀏覽</div>
+    <div class="nav-item" data-page="instructions" onclick="nav(this)"><span class="nav-icon">📖</span>使用說明</div>
+    <div class="nav-item" data-page="settings" onclick="nav(this)"><span class="nav-icon">⚙️</span>API 設定</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── Upload Page ── -->
+    <section class="page active" id="page-upload">
+      <div class="page-title">上傳試卷 PDF</div>
+      <div class="page-sub">支援多檔複選，系統將自動辨識科目、分析題目並存入題庫</div>
+
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="upload-icon">📄</div>
+        <div style="font-size:16px; font-weight:600;">拖曳 PDF 至此，或點選選擇檔案</div>
+        <div class="upload-hint">支援單次上傳單一 PDF 檔案</div>
+        <div class="upload-btn">選擇檔案</div>
+      </div>
+      <input type="file" id="file-input" accept=".pdf" onchange="handleFiles(this.files)" />
+
+      <div style="margin-top: 24px; display: flex; gap: 8px;">
+        <input type="text" id="url-input" class="filter-input" style="flex: 1; padding: 12px;" placeholder="或在此貼上 PDF 檔案連結 (例如 https://example.com/test.pdf)" />
+        <button class="btn btn-primary" onclick="handleUrl()">從連結載入</button>
+      </div>
+
+      <div class="job-list" id="job-list"></div>
+    </section>
+
+    <!-- ── Questions Page ── -->
+    <section class="page" id="page-questions">
+      <div class="page-title">題庫瀏覽</div>
+      <div class="page-sub">勾選題目後可匯出為 Word 試卷</div>
+
+      <div id="stats-grid" class="stats-grid"></div>
+
+      <div class="filters">
+        <select class="filter-select" id="filter-source" onchange="loadQuestions()">
+          <option value="">所有來源檔案</option>
+        </select>
+        <select class="filter-select" id="filter-subject" onchange="loadQuestions()">
+          <option value="">所有科目</option>
+        </select>
+        <select class="filter-select" id="filter-type" onchange="loadQuestions()">
+          <option value="">所有題型</option>
+          <option>選擇題</option><option>填充題</option><option>問答題</option>
+          <option>閱讀測驗</option><option>寫作題</option><option>其他</option>
+        </select>
+        <input class="filter-input" id="filter-keyword" placeholder="🔍 搜尋題幹關鍵字" oninput="debounceLoad()" />
+        <button class="btn btn-ghost" onclick="clearFilters()">清除篩選</button>
+        <button class="btn btn-ghost" onclick="toggleSelectAll()">全選／取消</button>
+      </div>
+
+      <table class="q-table">
+        <thead>
+          <tr>
+            <th style="width:40px"></th>
+            <th style="width:120px">科目 / 題型</th>
+            <th>題幹</th>
+            <th style="width:140px">來源檔案</th>
+            <th style="width:80px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="q-tbody">
+          <tr><td colspan="5" class="no-data">請先上傳試卷 PDF 以建立題庫</td></tr>
+        </tbody>
+      </table>
+
+      <div class="export-bar">
+        <div class="selected-count" id="selected-count">尚未選取題目</div>
+        <button class="btn btn-danger" id="delete-batch-btn" onclick="deleteBatch()" disabled style="margin-right: auto;">🗑 刪除已選取</button>
+        <input class="export-title-input" id="export-title" placeholder="試卷標題（例：英文月考）" value="試卷" />
+        <button class="btn btn-primary" id="export-btn" onclick="exportWord()" disabled>⬇ 匯出 Word</button>
+      </div>
+    </section>
+
+    <!-- ── Settings Page ── -->
+    <section class="page" id="page-settings">
+      <div class="page-title">API 設定</div>
+      <div class="page-sub">設定 Google Gemini API 金鑰，系統重啟後需重新輸入</div>
+      <div class="form-group">
+        <label class="form-label">Gemini API Key</label>
+        <input class="form-input" type="password" id="api-key-input" placeholder="AIzaSy..." />
+      </div>
+      <button class="btn btn-primary" onclick="saveApiKey()">儲存並套用</button>
+      <div id="api-alert"></div>
+    </section>
+
+    <!-- ── Instructions Page ── -->
+    <section class="page" id="page-instructions">
+      <div class="page-title">使用說明與常見問題</div>
+      <div class="page-sub">了解如何發揮錯卷題庫系統的最大效益</div>
+      
+      <div style="background: var(--surface); padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); line-height: 1.6;">
+        <h3 style="color: var(--accent); margin-bottom: 12px; font-size: 16px;">1. 關於上傳 PDF 與檔案連結</h3>
+        <ul style="margin-left: 20px; color: var(--muted); font-size: 14px; margin-bottom: 24px;">
+          <li style="margin-bottom: 8px;"><b>強烈建議使用「原始電子檔」匯出的 PDF：</b> 若直接由 Word 匯出成 PDF，系統能精準萃取裡面的小圖表，並在匯出 Word 時完美安插在題目段落之間。</li>
+          <li style="margin-bottom: 8px;"><b>掃描檔的限制：</b> 如果您上傳的是「整頁掃描成一張大圖」的 PDF，系統底層只會抓到一張「覆蓋全頁的大圖」，這張大圖會被分配到某一個題目中。我們無法自動將大圖剪裁成一小塊一小塊的題目附圖。</li>
+          <li style="margin-bottom: 8px;"><b>檔案連結限制：</b> 從連結載入功能僅支援「公開、可直接下載」的 PDF 網址。不支援需要登入或本身是網頁檢視器（如 Google Drive 預覽頁、Adobe Acrobat 線上預覽）的連結。</li>
+        </ul>
+
+        <h3 style="color: var(--accent); margin-bottom: 12px; font-size: 16px;">2. 題庫瀏覽與篩選</h3>
+        <ul style="margin-left: 20px; color: var(--muted); font-size: 14px; margin-bottom: 24px;">
+          <li style="margin-bottom: 8px;">上傳解析完成後，請點擊左側「題庫瀏覽」分頁，下拉選單會自動更新出剛剛上傳的來源檔案。</li>
+          <li style="margin-bottom: 8px;">您可以利用「來源檔案」、「題型」來過濾題目，並點擊右上角的「全選」來進行批次操作。</li>
+          <li style="margin-bottom: 8px;">曾經被匯出過 Word 的題目，其來源檔案下方會顯示綠色的「✅ 已匯出」與時間戳記，幫助您避免重複出題。</li>
+        </ul>
+
+        <h3 style="color: var(--accent); margin-bottom: 12px; font-size: 16px;">3. 批次刪除與匯出</h3>
+        <ul style="margin-left: 20px; color: var(--muted); font-size: 14px;">
+          <li style="margin-bottom: 8px;"><b>批次刪除：</b> 篩選出特定的題目並全選後，您可以點擊下方紅色的「🗑 刪除已選取」，將整批題目連同圖檔一併刪除。此動作不可復原，請小心使用。</li>
+          <li style="margin-bottom: 8px;"><b>匯出 Word 排版：</b> 匯出的 Word 檔會自動依照「題型」分組（如選擇題、填充題）。而且同一個題型群組內的題目，會完美按照當初在 PDF 檔案中的「上下游原始順序」排列，確保試卷邏輯流暢。</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ── Navigation ────────────────────────────────────────────────────────────────
+function nav(el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('page-' + el.dataset.page).classList.add('active');
+  if (el.dataset.page === 'questions') {
+    initMeta();
+    loadQuestions();
+  }
+}
+
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+function onDragOver(e) { e.preventDefault(); document.getElementById('upload-zone').classList.add('dragover'); }
+function onDragLeave(e) { document.getElementById('upload-zone').classList.remove('dragover'); }
+function onDrop(e) { e.preventDefault(); onDragLeave(e); handleFiles(e.dataTransfer.files); }
+
+async function handleFiles(files) {
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+
+  const res = await fetch('/api/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+
+  for (const job of data.jobs || []) {
+    addJobCard(job.job_id, job.filename);
+    pollJob(job.job_id);
+  }
+}
+
+async function handleUrl() {
+  const urlInput = document.getElementById('url-input');
+  const url = urlInput.value.trim();
+  if (!url) return;
+  
+  urlInput.value = ''; // clear input
+  
+  const res = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  const data = await res.json();
+  
+  if (!res.ok) {
+    alert(data.error || '載入失敗');
+    return;
+  }
+
+  for (const job of data.jobs || []) {
+    addJobCard(job.job_id, job.filename);
+    pollJob(job.job_id);
+  }
+}
+
+function addJobCard(jobId, filename) {
+  const list = document.getElementById('job-list');
+  const div = document.createElement('div');
+  div.className = 'job-card';
+  div.id = 'job-' + jobId;
+  div.innerHTML = `
+    <div class="job-name">📄 ${filename}</div>
+    <div id="job-count-${jobId}" class="job-count"></div>
+    <span class="badge badge-queued" id="job-badge-${jobId}">排隊中</span>
+  `;
+  list.prepend(div);
+}
+
+async function pollJob(jobId) {
+  const badge = document.getElementById('job-badge-' + jobId);
+  const count = document.getElementById('job-count-' + jobId);
+  const interval = setInterval(async () => {
+    const res = await fetch('/api/status/' + jobId);
+    const data = await res.json();
+    if (data.status === 'processing') {
+      badge.className = 'badge badge-processing'; badge.textContent = '辨識中…';
+    } else if (data.status === 'done') {
+      badge.className = 'badge badge-done'; badge.textContent = '完成';
+      count.textContent = `共辨識 ${data.result?.total_questions || 0} 題`;
+      clearInterval(interval);
+    } else if (data.status === 'error') {
+      badge.className = 'badge badge-error'; badge.textContent = '失敗';
+      count.textContent = data.error || '';
+      clearInterval(interval);
+    }
+  }, 2000);
+}
+
+// ── Questions ─────────────────────────────────────────────────────────────────
+let selectedIds = new Set();
+let allQuestions = [];
+
+async function loadQuestions() {
+  const source_file = document.getElementById('filter-source').value;
+  const subject = document.getElementById('filter-subject').value;
+  const type = document.getElementById('filter-type').value;
+  const keyword = document.getElementById('filter-keyword').value;
+  const params = new URLSearchParams({ source_file, subject, type, keyword });
+  const res = await fetch('/api/questions?' + params);
+  const data = await res.json();
+  allQuestions = data.questions || [];
+  renderTable(allQuestions);
+  updateStats();
+}
+
+async function updateStats() {
+  const res = await fetch('/api/questions');
+  const data = await res.json();
+  const qs = data.questions || [];
+  const counts = {};
+  qs.forEach(q => counts[q.subject] = (counts[q.subject] || 0) + 1);
+  const grid = document.getElementById('stats-grid');
+  grid.innerHTML = Object.entries(counts).map(([s, c]) => `
+    <div class="stat-card">
+      <div class="stat-label">${s}</div>
+      <div class="stat-value">${c}</div>
+    </div>
+  `).join('') + `<div class="stat-card"><div class="stat-label">總題數</div><div class="stat-value">${qs.length}</div></div>`;
+}
+
+function renderTable(qs) {
+  const tbody = document.getElementById('q-tbody');
+  if (!qs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-data">沒有符合條件的題目</td></tr>';
+    return;
+  }
+  
+  function formatStem(stem, qId) {
+    let s = escHtml(stem);
+    // 替換 [IMAGE: xxx.jpg] 為真實圖片
+    return s.replace(/\[IMAGE:\s*(.+?)\]/g, (match, p1) => {
+      return `<img src="/api/images/${qId}/${p1}" style="max-width: 100%; max-height: 200px; display: block; margin: 8px 0; border: 1px solid var(--border); border-radius: 4px;" alt="附圖">`;
+    });
+  }
+
+  tbody.innerHTML = qs.map(q => `
+    <tr id="row-${q.id}" class="${selectedIds.has(q.id) ? 'selected' : ''}" onclick="toggleSelect('${q.id}')">
+      <td><input type="checkbox" ${selectedIds.has(q.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleSelect('${q.id}')" /></td>
+      <td><span class="subject-tag">${q.subject}</span><span class="type-tag">${q.type}</span></td>
+      <td class="stem-text">${formatStem(q.stem, q.id)}</td>
+      <td style="color:var(--muted);font-size:12px;">
+        ${q.source_file}
+        ${q.exported_at ? `<div style="color:var(--success);margin-top:4px;font-size:11px;">✅已匯出<br>${q.exported_at}</div>` : ''}
+      </td>
+      <td><button class="btn btn-danger" onclick="event.stopPropagation();deleteQ('${q.id}')">刪除</button></td>
+    </tr>
+  `).join('');
+  updateExportBar();
+}
+
+function toggleSelect(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  const row = document.getElementById('row-' + id);
+  if (row) {
+    row.classList.toggle('selected', selectedIds.has(id));
+    const cb = row.querySelector('input[type=checkbox]');
+    if (cb) cb.checked = selectedIds.has(id);
+  }
+  updateExportBar();
+}
+
+function toggleSelectAll() {
+  const allSelected = allQuestions.every(q => selectedIds.has(q.id));
+  if (allSelected) allQuestions.forEach(q => selectedIds.delete(q.id));
+  else allQuestions.forEach(q => selectedIds.add(q.id));
+  renderTable(allQuestions);
+}
+
+function updateExportBar() {
+  const n = selectedIds.size;
+  document.getElementById('selected-count').textContent = n ? `已選取 ${n} 題` : '尚未選取題目';
+  document.getElementById('export-btn').disabled = n === 0;
+  document.getElementById('delete-batch-btn').disabled = n === 0;
+  
+  if (n > 0) {
+    const selectedQs = allQuestions.filter(q => selectedIds.has(q.id));
+    const uniqueSubjects = new Set(selectedQs.map(q => q.subject));
+    if (uniqueSubjects.size === 1) {
+      document.getElementById('export-title').value = [...uniqueSubjects][0] + '試卷';
+    } else {
+      document.getElementById('export-title').value = '綜合試卷';
+    }
+  } else {
+    document.getElementById('export-title').value = '試卷';
+  }
+}
+
+async function deleteQ(id) {
+  if (!confirm('確定要刪除這道題目？')) return;
+  await fetch('/api/questions/' + id, { method: 'DELETE' });
+  selectedIds.delete(id);
+  loadQuestions();
+}
+
+async function deleteBatch() {
+  if (selectedIds.size === 0) return;
+  if (!confirm(`確定要刪除選取的 ${selectedIds.size} 道題目？此動作無法復原。`)) return;
+  
+  await fetch('/api/questions/batch', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_ids: [...selectedIds] })
+  });
+  
+  selectedIds.clear();
+  loadQuestions();
+  initMeta(); // Update source files list
+}
+
+function clearFilters() {
+  document.getElementById('filter-source').value = '';
+  document.getElementById('filter-subject').value = '';
+  document.getElementById('filter-type').value = '';
+  document.getElementById('filter-keyword').value = '';
+  loadQuestions();
+}
+
+let debounceTimer;
+function debounceLoad() { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadQuestions, 400); }
+
+async function exportWord() {
+  const title = document.getElementById('export-title').value || '試卷';
+  const res = await fetch('/api/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_ids: [...selectedIds], title })
+  });
+  if (!res.ok) { alert('匯出失敗：' + (await res.json()).error); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = title + '.docx'; a.click();
+  URL.revokeObjectURL(url);
+  
+  // Refresh to show exported_at time
+  setTimeout(loadQuestions, 1000);
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  const alertEl = document.getElementById('api-alert');
+  if (!key) { alertEl.className = 'alert alert-error'; alertEl.textContent = '請輸入 API Key'; return; }
+  const res = await fetch('/api/set-apikey', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) });
+  const data = await res.json();
+  if (res.ok) { alertEl.className = 'alert alert-success'; alertEl.textContent = '✅ API Key 已套用！'; }
+  else { alertEl.className = 'alert alert-error'; alertEl.textContent = '❌ ' + data.error; }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function initMeta() {
+  const res = await fetch('/api/meta');
+  const data = await res.json();
+  
+  const selSub = document.getElementById('filter-subject');
+  selSub.innerHTML = '<option value="">所有科目</option>';
+  (data.subjects || []).forEach(s => {
+    const o = document.createElement('option'); o.value = s; o.textContent = s; selSub.appendChild(o);
+  });
+
+  const selSource = document.getElementById('filter-source');
+  const currentSource = selSource.value;
+  selSource.innerHTML = '<option value="">所有來源檔案</option>';
+  (data.source_files || []).forEach(s => {
+    const o = document.createElement('option'); o.value = s; o.textContent = s; selSource.appendChild(o);
+  });
+  if (data.source_files && data.source_files.includes(currentSource)) {
+    selSource.value = currentSource;
+  }
+  
+  
+  // Load saved API key
+  const apiRes = await fetch('/api/get-apikey');
+  const apiData = await apiRes.json();
+  if (apiData.key) {
+    document.getElementById('api-key-input').value = apiData.key;
+  }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+initMeta();
+</script>
+</body>
+</html>

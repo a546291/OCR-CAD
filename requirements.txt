@@ -1,0 +1,4 @@
+flask
+pymupdf
+google-genai
+python-docx
